@@ -111,9 +111,10 @@ export default function GamePage() {
       {isPaused && (
         <div className="pause-overlay">
           <div className="pause-menu">
-            <h2>Jogo Pausado</h2>
-            <button onClick={() => setIsPaused(false)}>Continuar</button>
-            <button onClick={() => router.push("/menu")}>Menu Principal</button>
+            <h2>Missão em Pausa</h2>
+            <p>Nave em modo de suspensão</p>
+            <button onClick={() => setIsPaused(false)}>Continuar Missão</button>
+            <button onClick={() => router.push("/menu")}>Abandonar Missão</button>
           </div>
         </div>
       )}

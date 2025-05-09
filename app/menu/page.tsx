@@ -7,7 +7,7 @@ export default function MainMenu() {
   const router = useRouter()
 
   const handleStart = () => {
-    router.push("/game")
+    router.push("/intro")
   }
 
   const handleHowToPlay = () => {
@@ -26,8 +26,8 @@ export default function MainMenu() {
         transition={{ duration: 0.5 }}
         className="text-center"
       >
-        <h1 className="text-5xl font-bold text-white mb-2">Saturn Rings Runner</h1>
-        <p className="text-xl text-purple-300 mb-2">Um endless runner orbital</p>
+        <h1 className="text-5xl font-bold text-white mb-2">Ataque a Saturno</h1>
+        <p className="text-xl text-purple-300 mb-2">Destrua o planeta dos Saturnídeos</p>
         <p className="text-sm text-purple-400 mb-10">Clique ou pressione uma tecla para ativar o som</p>
 
         <div className="space-y-4">

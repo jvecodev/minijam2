@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 
-type SoundType = "jump" | "hit" | "crystal" | "boost" | "shield" | "levelUp" | "gameOver"
+type SoundType = "jump" | "hit" | "crystal" | "boost" | "shield" | "levelUp" | "gameOver" | "shieldBreak" | "damage" | "powerUp" | "extraLife" | "shoot" | "explosion"
 
 // Create a dummy implementation for environments where audio isn't available
 const createDummyAudio = () => {
@@ -25,6 +25,12 @@ export function useSound(volume: number) {
     shield: createDummyAudio(),
     levelUp: createDummyAudio(),
     gameOver: createDummyAudio(),
+    shieldBreak: createDummyAudio(),
+    damage: createDummyAudio(),
+    powerUp: createDummyAudio(),
+    extraLife: createDummyAudio(),
+    shoot: createDummyAudio(),
+    explosion: createDummyAudio()
   })
 
   // Track if a sound is currently playing to prevent overlapping plays
@@ -36,6 +42,12 @@ export function useSound(volume: number) {
     shield: false,
     levelUp: false,
     gameOver: false,
+    shieldBreak: false,
+    damage: false,
+    powerUp: false,
+    extraLife: false,
+    shoot: false,
+    explosion: false
   })
 
   // Listen for user interaction
@@ -84,6 +96,14 @@ export function useSound(volume: number) {
         shield: loadSound("shield", "/sounds/shield.mp3"),
         levelUp: loadSound("levelUp", "/sounds/levelUp.mp3"),
         gameOver: loadSound("gameOver", "/sounds/gameOver.mp3"),
+        // Novos sons - usaremos sons existentes como fallbacks
+        shieldBreak: loadSound("shieldBreak", "/sounds/shield.mp3"),
+        damage: loadSound("damage", "/sounds/hit.mp3"),
+        powerUp: loadSound("powerUp", "/sounds/crystal.mp3"),
+        extraLife: loadSound("extraLife", "/sounds/levelUp.mp3"),
+        // Sons para o sistema de tiro
+        shoot: loadSound("shoot", "/sounds/jump.mp3"),
+        explosion: loadSound("explosion", "/sounds/gameOver.mp3")
       }
 
       setSoundsLoaded(true)
