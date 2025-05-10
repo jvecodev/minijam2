@@ -1,5 +1,6 @@
 import type p5Types from "p5"
 import { Ring } from "@/game/Ring"
+import { PlayerControls } from "@/types"
 
 export class Player {
   p5: p5Types
@@ -67,8 +68,7 @@ export class Player {
     this.x = pos.x
     this.y = pos.y
   }
-  
-  update(controls: {left: boolean, right: boolean, jump: boolean, shoot: boolean}, deltaTime: number, gameTime: number) {
+    update(controls: PlayerControls, deltaTime: number, gameTime: number): void {
     if (!this.ring) return;
     
     // Atualiza o timer de animação com velocidade variável baseada na velocidade

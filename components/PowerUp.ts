@@ -1,13 +1,10 @@
 import type p5Types from "p5"
 import { Ring } from "@/game/Ring"
+import { PowerUpType, Position, Dimensions } from "@/types"
 
-interface PowerUp {
+interface PowerUp extends Position, Dimensions {
   angle: number
-  x: number
-  y: number
-  width: number
-  height: number
-  type: "shield" | "speed" | "life"
+  type: PowerUpType
   active: boolean
   animation: number
   pulseFrequency: number
@@ -42,8 +39,7 @@ export class PowerUpManager {
     this.centerX = ring.centerX
     this.centerY = ring.centerY
     this.ringWidth = ring.getRingWidth()
-  }
-  update(gameSpeed: number, deltaTime: number) {
+  }  update(gameSpeed: number, deltaTime: number): void {
     if (!this.ring) return;
     
     const time = this.p5.millis() * 0.001; // Tempo em segundos para animações
@@ -139,8 +135,7 @@ export class PowerUpManager {
 
     // Remove power-ups inativos
     this.powerUps = this.powerUps.filter((pu) => pu.active)
-  }
-  draw() {
+  }  draw(): void {
     const time = this.p5.millis() * 0.001;
     this.p5.push()
 
@@ -486,8 +481,7 @@ export class PowerUpManager {
       trailPoints: [] // Pontos da trilha
     })
   }
-
-  getPowerUps() {
+  getPowerUps(): PowerUp[] {
     return this.powerUps
   }
 }

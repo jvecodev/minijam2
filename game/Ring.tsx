@@ -87,8 +87,7 @@ export class Ring {
       this.segmentColors.push({ r, g, b })
     }
   }
-
-  update(deltaTime: number) {
+  update(deltaTime: number): void {
     // Atualiza a rotação do anel com velocidade variável
     const time = this.p5.millis() * 0.001;
     
@@ -134,8 +133,7 @@ export class Ring {
       }
     }
   }
-
-  draw() {
+  draw(): void {
     const time = this.p5.millis() * 0.001;
     
     this.p5.push()
@@ -351,16 +349,14 @@ export class Ring {
     
     this.p5.pop()
   }
-
-  getPointOnRing(angle: number) {
+  getPointOnRing(angle: number): { x: number, y: number } {
     const radius = this.innerRadius + (this.outerRadius - this.innerRadius) / 2
     const actualAngle = angle + this.rotation
     const x = this.centerX + radius * this.p5.cos(actualAngle)
     const y = this.centerY + radius * this.p5.sin(actualAngle)
     return { x, y }
   }
-  
-  movePlayer(playerAngle: number, direction: number, speed: number) {
+    movePlayer(playerAngle: number, direction: number, speed: number): number {
     // Move o jogador ao longo do anel em um sentido orbital
     this.playerAngle += direction * speed
     
@@ -377,8 +373,7 @@ export class Ring {
   getPlayerPosition() {
     return this.getPointOnRing(this.playerAngle)
   }
-  
-  getRingWidth() {
+    getRingWidth(): number {
     return this.outerRadius - this.innerRadius
   }
   

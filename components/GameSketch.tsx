@@ -71,9 +71,8 @@ export default function GameSketch({
 
   // Hook de som
   const { playSound } = useSound(volume.current)
-
   // Setup do P5.js
-  const setup = (p5: p5Types, canvasParentRef: Element) => {
+  const setup = (p5: p5Types, canvasParentRef: Element): void => {
     // Cria o canvas em tela cheia
     p5.createCanvas(p5.windowWidth, p5.windowHeight).parent(canvasParentRef)
 
@@ -108,9 +107,8 @@ export default function GameSketch({
     // Configura a velocidade inicial do jogo
     game.gameSpeed = 5 + (game.level - 1) * 0.5
   }
-
   // Função de desenho principal (loop do jogo)
-  const draw = (p5: p5Types) => {
+  const draw = (p5: p5Types): void => {
     if (isPaused) return
 
     const game = gameRef.current

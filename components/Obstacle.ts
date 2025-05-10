@@ -1,7 +1,8 @@
 import type p5Types from "p5"
 import { Ring } from "@/game/Ring"
+import { ObstacleType, Position, Dimensions } from "@/types"
 
-interface Obstacle {
+interface Obstacle extends Position, Dimensions {
   angle: number
   distance: number
   width: number
@@ -52,8 +53,7 @@ export class ObstacleManager {
     this.centerX = ring.centerX
     this.centerY = ring.centerY
     this.ringWidth = ring.getRingWidth()
-  }
-  update(gameSpeed: number, deltaTime: number) {
+  }  update(gameSpeed: number, deltaTime: number): void {
     if (!this.ring) return;
     
     const time = this.p5.millis() * 0.001; // Tempo em segundos para animações
@@ -129,8 +129,7 @@ export class ObstacleManager {
 
     // Remove obstáculos inativos
     this.obstacles = this.obstacles.filter((obs) => obs.active);
-  }
-  draw() {
+  }  draw(): void {
     const time = this.p5.millis() * 0.001; // Tempo em segundos para animações
     this.p5.push();
 
@@ -450,8 +449,7 @@ export class ObstacleManager {
       }
     })
   }
-
-  getObstacles() {
+  getObstacles(): Obstacle[] {
     return this.obstacles
   }
 }
