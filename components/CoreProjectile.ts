@@ -1,4 +1,5 @@
 import type p5Types from "p5"
+import { ObjectPool } from "@/game/entities/ObjectPool"
 
 export class CoreProjectile {
   p5: p5Types
@@ -18,34 +19,51 @@ export class CoreProjectile {
     this.p5 = p5
     this.x = startX
     this.y = startY
-    this.width = this.p5.random(14, 22) // Projéteis do núcleo são maiores e mais visíveis
-    this.height = this.width
-    this.speed = this.p5.random(7, 12) // Velocidade um pouco maior para tornar mais desafiador
-    this.active = true
+    this.width = 18 // Valor padrão, será modificado no init()
+    this.height = 18
+    this.speed = 10
+    this.active = false
+    this.directionX = 0
+    this.directionY = 0    
+    this.distanceTraveled = 0
+    this.maxDistance = p5.width * 2
+    this.color = { r: 255, g: 100, b: 50 }
+  }
+
+  reset(): void {
+    this.active = false;
+    this.distanceTraveled = 0;
+  }
+
+  init(startX: number, startY: number, directionX: number, directionY: number): void {
+    this.x = startX;
+    this.y = startY;
+    this.width = this.p5.random(14, 22); // Projéteis do núcleo são maiores e mais visíveis
+    this.height = this.width;
+    this.speed = this.p5.random(7, 12); // Velocidade um pouco maior para tornar mais desafiador
+    this.active = true;
     
     // Normaliza a direção
-    const distance = Math.sqrt(directionX * directionX + directionY * directionY)
-    this.directionX = directionX / distance
-    this.directionY = directionY / distance
+    const distance = Math.sqrt(directionX * directionX + directionY * directionY);
+    this.directionX = directionX / distance;
+    this.directionY = directionY / distance;
     
     // Adiciona pequena variação aleatória na direção para dificultar a previsibilidade
-    this.directionX += this.p5.random(-0.2, 0.2)
-    this.directionY += this.p5.random(-0.2, 0.2)
+    this.directionX += this.p5.random(-0.2, 0.2);
+    this.directionY += this.p5.random(-0.2, 0.2);
     
     // Renormaliza após adicionar variação
-    const newDistance = Math.sqrt(this.directionX * this.directionX + this.directionY * this.directionY)
-    this.directionX = this.directionX / newDistance
-    this.directionY = this.directionY / newDistance
-    
-    this.distanceTraveled = 0
-    this.maxDistance = this.p5.width * 2 // Pode viajar mais longe que os projéteis do jogador
+    const newDistance = Math.sqrt(this.directionX * this.directionX + this.directionY * this.directionY);
+    this.directionX = this.directionX / newDistance;
+    this.directionY = this.directionY / newDistance;
     
     // Cores mais quentes/avermelhadas para os projéteis do núcleo
-    const r = this.p5.random(220, 255)
-    const g = this.p5.random(50, 150)
-    const b = this.p5.random(20, 100)
-    this.color = { r, g, b }
+    const r = this.p5.random(220, 255);
+    const g = this.p5.random(50, 150);
+    const b = this.p5.random(20, 100);
+    this.color = { r, g, b };
   }
+
   update(deltaTime: number) {
     if (!this.active) return
     
@@ -151,6 +169,7 @@ export class CoreProjectileManager {
   aimStartTime: number
   aimTarget: {x: number, y: number} | null
   aimSource: {x: number, y: number} | null
+  projectilePool: ObjectPool<CoreProjectile>
   
   constructor(p5: p5Types) {
     this.p5 = p5
@@ -162,8 +181,17 @@ export class CoreProjectileManager {
     this.aimStartTime = 0
     this.aimTarget = null
     this.aimSource = null
+    
+    // Inicializa o pool de projéteis do núcleo
+    this.projectilePool = new ObjectPool<CoreProjectile>(
+      () => new CoreProjectile(this.p5, 0, 0, 0, 0), // Factory
+      (proj) => proj.reset(),                     // Reset
+      15,                                           // Tamanho inicial do pool
+      50                                           // Tamanho máximo do pool
+    )
   }
-    fireFromCore(coreX: number, coreY: number, targetX: number, targetY: number) {
+    
+  fireFromCore(coreX: number, coreY: number, targetX: number, targetY: number) {
     // Calcula a direção para o alvo (jogador)
     const dirX = targetX - coreX
     const dirY = targetY - coreY
@@ -181,7 +209,9 @@ export class CoreProjectileManager {
       const rotatedDirX = dirX * cosVariation - dirY * sinVariation;
       const rotatedDirY = dirX * sinVariation + dirY * cosVariation;
       
-      const projectile = new CoreProjectile(this.p5, coreX, coreY, rotatedDirX, rotatedDirY);
+      // Usa o pool de objetos
+      const projectile = this.projectilePool.get();
+      projectile.init(coreX, coreY, rotatedDirX, rotatedDirY);
       this.projectiles.push(projectile);
     }
     
@@ -222,13 +252,24 @@ export class CoreProjectileManager {
       // Som de disparo (se for implementado no jogo)
       // playSound("coreShot");
     }
+      // Atualiza todos os projéteis e identifica inativos
+    const inactiveProjectiles: CoreProjectile[] = [];
     
-    // Atualiza todos os projéteis
     for (const projectile of this.projectiles) {
-      projectile.update(deltaTime)
+      projectile.update(deltaTime);
+      
+      // Coleta projéteis inativos
+      if (!projectile.active) {
+        inactiveProjectiles.push(projectile);
+      }
     }
     
-    // Remove projéteis inativos
+    // Devolve os projéteis inativos ao pool
+    for (const inactiveProj of inactiveProjectiles) {
+      this.projectilePool.release(inactiveProj);
+    }
+    
+    // Remove projéteis inativos da lista ativa
     this.projectiles = this.projectiles.filter(p => p.active)
   }
     draw() {

@@ -1,6 +1,7 @@
 import type p5Types from "p5"
 import { Ring } from "@/game/Ring"
 import { PowerUpType, Position, Dimensions } from "@/types"
+import { ObjectPool } from "@/game/entities/ObjectPool"
 
 interface PowerUp extends Position, Dimensions {
   angle: number
@@ -24,6 +25,7 @@ export class PowerUpManager {
   centerY: number
   ringWidth: number
   ring: Ring | null
+  powerUpPool: ObjectPool<PowerUp>
 
   constructor(p5: p5Types, centerX: number, ringWidth: number) {
     this.p5 = p5
@@ -32,6 +34,36 @@ export class PowerUpManager {
     this.centerY = p5.height / 2
     this.ringWidth = ringWidth
     this.ring = null
+    
+    // Inicializa o pool de power-ups
+    this.powerUpPool = new ObjectPool<PowerUp>(
+      // Factory function
+      () => ({
+        angle: 0,
+        x: 0,
+        y: 0,
+        width: 30,
+        height: 30,
+        type: "shield", // Será atualizado durante o uso
+        active: false,
+        animation: 0,
+        pulseFrequency: 1,
+        rotationSpeed: 0,
+        orbitRadius: 4,
+        orbitPhase: 0,
+        particleTimer: 0,
+        glowSize: 1,
+        glowOpacity: 0.6,
+        trailPoints: []
+      }),
+      // Reset function
+      (powerUp) => {
+        powerUp.active = false;
+        powerUp.trailPoints = [];
+      },
+      10, // Tamanho inicial do pool
+      30  // Tamanho máximo do pool
+    );
   }
 
   setRing(ring: Ring) {
@@ -39,7 +71,9 @@ export class PowerUpManager {
     this.centerX = ring.centerX
     this.centerY = ring.centerY
     this.ringWidth = ring.getRingWidth()
-  }  update(gameSpeed: number, deltaTime: number): void {
+  }
+
+  update(gameSpeed: number, deltaTime: number): void {
     if (!this.ring) return;
     
     const time = this.p5.millis() * 0.001; // Tempo em segundos para animações
@@ -131,11 +165,19 @@ export class PowerUpManager {
       if (powerUp.angle > this.p5.TWO_PI * 0.9 && powerUp.angle < this.p5.TWO_PI) {
         powerUp.active = false
       }
+    }    // Identifica power-ups inativos
+    const inactivePowerUps = this.powerUps.filter((pu) => !pu.active);
+    
+    // Devolve os power-ups inativos ao pool
+    for (const powerUp of inactivePowerUps) {
+      this.powerUpPool.release(powerUp);
     }
-
-    // Remove power-ups inativos
+    
+    // Remove power-ups inativos da lista ativa
     this.powerUps = this.powerUps.filter((pu) => pu.active)
-  }  draw(): void {
+  }
+
+  draw(): void {
     const time = this.p5.millis() * 0.001;
     this.p5.push()
 
@@ -210,7 +252,9 @@ export class PowerUpManager {
       const primaryPulse = Math.sin(powerUp.animation) * 0.1;
       const secondaryPulse = Math.sin(time * 5) * 0.05;
       const scale = 1 + primaryPulse + secondaryPulse;
-      this.p5.scale(scale)      // Desenha com base no tipo
+      this.p5.scale(scale)
+
+      // Desenha com base no tipo
       switch (powerUp.type) {
         case "shield":
           // Camada externa animada
@@ -252,7 +296,8 @@ export class PowerUpManager {
             this.p5.vertex(px, py);
           }
           this.p5.endShape(this.p5.CLOSE);
-            // Núcleo central que pulsa
+          
+          // Núcleo central que pulsa
           this.p5.noStroke();
           const shieldCorePulse = 1 + Math.sin(time * 5) * 0.2;
           this.p5.fill(200, 230, 255, 200);
@@ -314,7 +359,8 @@ export class PowerUpManager {
             this.p5.vertex(px, py);
           }
           this.p5.endShape(this.p5.CLOSE);
-            // Círculo central pulsante
+          
+          // Círculo central pulsante
           const speedCorePulse = Math.sin(time * 8) * 0.2 + 1;
           const gradientSteps = 5;
           
@@ -345,7 +391,8 @@ export class PowerUpManager {
             
             this.p5.line(startX, startY, endX, endY);
           }
-            this.p5.pop();
+          
+          this.p5.pop();
           break;
           
         case "life":
@@ -462,25 +509,32 @@ export class PowerUpManager {
       const pos = this.ring.getPointOnRing(angle)
       x = pos.x
       y = pos.y
-    }    this.powerUps.push({
-      angle,
-      x,
-      y,
-      width: 30,
-      height: 30,
-      type,
-      active: true,
-      animation: 0,
-      pulseFrequency: 1 + Math.random() * 2, // Frequência de pulsação única para cada power-up
-      rotationSpeed: (Math.random() - 0.5) * 2, // Velocidade e direção de rotação aleatória
-      orbitRadius: 4 + Math.random() * 6, // Raio da órbita das partículas
-      orbitPhase: Math.random() * Math.PI * 2, // Fase inicial da órbita
-      particleTimer: 0,
-      glowSize: 1.0 + Math.random() * 0.5, // Tamanho do brilho
-      glowOpacity: 0.6 + Math.random() * 0.4, // Opacidade do brilho
-      trailPoints: [] // Pontos da trilha
-    })
+    }
+
+    // Obtém um power-up do pool
+    const powerUp = this.powerUpPool.get();
+    if (powerUp) {
+      powerUp.angle = angle;
+      powerUp.x = x;
+      powerUp.y = y;
+      powerUp.width = 30;
+      powerUp.height = 30;
+      powerUp.type = type;
+      powerUp.active = true;
+      powerUp.animation = 0;
+      powerUp.pulseFrequency = 1 + Math.random() * 2; // Frequência de pulsação única para cada power-up
+      powerUp.rotationSpeed = (Math.random() - 0.5) * 2; // Velocidade e direção de rotação aleatória
+      powerUp.orbitRadius = 4 + Math.random() * 6; // Raio da órbita das partículas
+      powerUp.orbitPhase = Math.random() * Math.PI * 2; // Fase inicial da órbita
+      powerUp.particleTimer = 0;
+      powerUp.glowSize = 1.0 + Math.random() * 0.5; // Tamanho do brilho
+      powerUp.glowOpacity = 0.6 + Math.random() * 0.4; // Opacidade do brilho
+      powerUp.trailPoints = []; // Pontos da trilha
+
+      this.powerUps.push(powerUp);
+    }
   }
+
   getPowerUps(): PowerUp[] {
     return this.powerUps
   }

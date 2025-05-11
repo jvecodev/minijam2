@@ -1,13 +1,14 @@
 import type p5Types from "p5"
 import { Ring } from "@/game/Ring"
 import { ObstacleType, Position, Dimensions } from "@/types"
+import { ObjectPool } from "@/game/entities/ObjectPool"
 
 interface Obstacle extends Position, Dimensions {
   angle: number
   distance: number
   width: number
   height: number
-  type: "meteor" | "ice"
+  type: ObstacleType
   active: boolean
   rotation: number
   rotationSpeed: number
@@ -38,6 +39,7 @@ export class ObstacleManager {
   centerY: number
   ringWidth: number
   ring: Ring | null
+  obstaclePool: ObjectPool<Obstacle>
 
   constructor(p5: p5Types, centerX: number, ringWidth: number) {
     this.p5 = p5
@@ -46,6 +48,41 @@ export class ObstacleManager {
     this.centerY = p5.height / 2
     this.ringWidth = ringWidth
     this.ring = null
+    
+    // Inicializa o pool de obstáculos
+    this.obstaclePool = new ObjectPool<Obstacle>(
+      // Factory function: cria um novo obstáculo com valores padrão
+      () => ({
+        angle: 0,
+        distance: 0,
+        width: 20,
+        height: 20,
+        type: "meteor", // Tipo padrão, será atualizado quando o obstáculo for usado
+        active: false,
+        rotation: 0,
+        rotationSpeed: 0,
+        x: 0, 
+        y: 0,
+        pulseTimer: 0,
+        pulseFrequency: 1,
+        pulseMagnitude: 0.1,
+        wobble: 0,
+        particleTimer: 0,
+        color: { r: 120, g: 80, b: 60, variation: 30 },
+        trail: {
+          active: false,
+          length: 8,
+          points: []
+        }
+      }),
+      // Reset function: reinicia um obstáculo para reutilização
+      (obstacle) => {
+        obstacle.active = false;
+        obstacle.trail.points = [];
+      },
+      20, // Tamanho inicial do pool
+      100 // Tamanho máximo do pool
+    );
   }
 
   setRing(ring: Ring) {
@@ -53,7 +90,9 @@ export class ObstacleManager {
     this.centerX = ring.centerX
     this.centerY = ring.centerY
     this.ringWidth = ring.getRingWidth()
-  }  update(gameSpeed: number, deltaTime: number): void {
+  }
+
+  update(gameSpeed: number, deltaTime: number): void {
     if (!this.ring) return;
     
     const time = this.p5.millis() * 0.001; // Tempo em segundos para animações
@@ -125,11 +164,19 @@ export class ObstacleManager {
       if (obstacle.angle > this.p5.TWO_PI * 0.9 && obstacle.angle < this.p5.TWO_PI) {
         obstacle.active = false;
       }
+    }    // Identifica e recicla obstáculos inativos
+    const inactiveObstacles = this.obstacles.filter((obs) => !obs.active);
+    
+    // Devolve os obstáculos inativos ao pool
+    for (const obstacle of inactiveObstacles) {
+      this.obstaclePool.release(obstacle);
     }
-
-    // Remove obstáculos inativos
+    
+    // Remove obstáculos inativos da lista ativa
     this.obstacles = this.obstacles.filter((obs) => obs.active);
-  }  draw(): void {
+  }
+
+  draw(): void {
     const time = this.p5.millis() * 0.001; // Tempo em segundos para animações
     this.p5.push();
 
@@ -372,32 +419,123 @@ export class ObstacleManager {
     this.p5.pop()
   }
   spawnObstacle(level: number, angle: number = 0) {
-    // Chance de criar um obstáculo de gelo aumenta com o nível
-    const iceChance = Math.min(0.1 + level * 0.05, 0.5)
-    const type = Math.random() < iceChance ? "ice" : "meteor"
-    
-    // Tamanho varia com o nível
-    const size = this.p5.random(20, 30 + level * 2)
+    // Estratégia de geração baseada no nível
+    const obstaclePattern = this.getObstaclePattern(level);
     
     // Se não for fornecido um ângulo, gera um aleatório
     // Começa em um ângulo próximo a 0 (topo do anel) e vai se movendo no sentido horário (para a esquerda)
     if (angle === 0) {
-      angle = this.p5.random(this.p5.PI * 0.1, this.p5.PI * 0.3)
+      angle = this.p5.random(this.p5.PI * 0.1, this.p5.PI * 0.3);
     }
     
+    // Padrões de obstáculos: a partir do nível 3, chance de criar múltiplos obstáculos
+    if (level >= 3 && Math.random() < 0.2 + Math.min(level * 0.05, 0.4)) {
+      this.createObstacleGroup(level, angle, obstaclePattern);
+      return;
+    }
+    
+    // Criação de obstáculo único
+    this.createSingleObstacle(level, angle, obstaclePattern);
+  }
+  
+  /**
+   * Determina o padrão de obstáculos com base no nível
+   */
+  private getObstaclePattern(level: number) {
+    // Chance de criar um obstáculo de gelo aumenta com o nível
+    const iceChance = Math.min(0.1 + level * 0.05, 0.5);
+    
+    // Tamanho básico
+    let minSize = 20;
+    let maxSize = 30 + level * 1.5; // Crescimento mais suave com o nível
+    
+    // Limita o tamanho máximo para manter o jogo jogável
+    maxSize = Math.min(maxSize, 50);
+    
+    // Características visuais baseadas no nível
+    const trailChance = Math.min(0.3 + level * 0.1, 0.9);
+    
+    // Velocidade de rotação varia com o nível
+    const maxRotationSpeed = 1 + (level * 0.1);
+    
+    return {
+      type: Math.random() < iceChance ? "ice" : "meteor",
+      minSize,
+      maxSize,
+      trailChance,
+      maxRotationSpeed
+    };
+  }
+  
+  /**
+   * Cria um grupo de obstáculos em padrão
+   */
+  private createObstacleGroup(level: number, baseAngle: number, pattern: any) {
+    // Número de obstáculos no grupo
+    const count = Math.min(2 + Math.floor(Math.random() * (level - 2)), 5);
+    
+    // Determina o tipo de padrão
+    const patternType = Math.random();
+    
+    if (patternType < 0.3) {
+      // Padrão em linha (obstáculos em sequência)
+      const angleGap = 0.1 + Math.random() * 0.15;
+      
+      for (let i = 0; i < count; i++) {
+        const angle = baseAngle + i * angleGap;
+        this.createSingleObstacle(level, angle, {
+          ...pattern,
+          // Obstáculos em linha são menores
+          minSize: pattern.minSize * 0.7,
+          maxSize: pattern.maxSize * 0.8
+        });
+      }
+    } else if (patternType < 0.6) {
+      // Padrão em zig-zag
+      const angleStep = 0.1 + Math.random() * 0.05;
+      const zigzagWidth = 0.05 + Math.random() * 0.05;
+      
+      for (let i = 0; i < count; i++) {
+        const offset = (i % 2 === 0) ? zigzagWidth : -zigzagWidth;
+        const angle = baseAngle + i * angleStep + offset;
+        this.createSingleObstacle(level, angle, {
+          ...pattern,
+          // Obstáculos em zig-zag são menores
+          minSize: pattern.minSize * 0.8,
+          maxSize: pattern.maxSize * 0.9
+        });
+      }
+    } else {
+      // Padrão em grupo denso
+      for (let i = 0; i < count; i++) {
+        // Espalha em uma pequena área
+        const angleOffset = (Math.random() - 0.5) * 0.15;
+        const angle = baseAngle + angleOffset;
+        this.createSingleObstacle(level, angle, pattern);
+      }
+    }
+  }
+  
+  /**
+   * Cria um único obstáculo com as propriedades especificadas
+   */
+  private createSingleObstacle(level: number, angle: number, pattern: any) {
+    // Tamanho varia com o nível, mas limitado pelos parâmetros do padrão
+    const size = this.p5.random(pattern.minSize, pattern.maxSize);
+    
     // Calcula a posição inicial
-    let x = this.centerX
-    let y = this.centerY
+    let x = this.centerX;
+    let y = this.centerY;
     
     if (this.ring) {
-      const pos = this.ring.getPointOnRing(angle)
-      x = pos.x
-      y = pos.y
+      const pos = this.ring.getPointOnRing(angle);
+      x = pos.x;
+      y = pos.y;
     }
 
     // Cores base dependendo do tipo de obstáculo
     let colorBase;
-    if (type === "meteor") {
+    if (pattern.type === "meteor") {
       // Variação de cores para meteoritos (marrom-vermelho-laranja)
       const redVariation = Math.random() * 40;
       colorBase = {
@@ -417,38 +555,41 @@ export class ObstacleManager {
       };
     }
     
-    // Efeito de trilha apenas para meteoritos maiores ou obstáculos em níveis mais altos
-    const hasTrail = (type === "meteor" && size > 20) || level > 3;
+    // Efeito de trilha com base na chance do padrão e tamanho do obstáculo
+    const hasTrail = Math.random() < pattern.trailChance || (pattern.type === "meteor" && size > pattern.maxSize * 0.8);
 
-    this.obstacles.push({
+    // Obtém um obstáculo do pool
+    const obstacle = this.obstaclePool.get();
+    if (!obstacle) return;
+
+    // Atualiza as propriedades do obstáculo
+    Object.assign(obstacle, {
       angle,
       distance: 0,
       width: size,
       height: size,
-      type,
+      type: pattern.type,
       active: true,
       rotation: Math.random() * this.p5.TWO_PI, // Rotação inicial aleatória
-      rotationSpeed: (Math.random() * 2 - 1) * 1.5, // Velocidade e direção de rotação aleatória
+      rotationSpeed: (Math.random() * 2 - 1) * pattern.maxRotationSpeed, // Velocidade e direção de rotação limitada pelo padrão
       x, 
       y,
-      // Propriedades de animação
       pulseTimer: Math.random() * Math.PI * 2, // Fase inicial aleatória
       pulseFrequency: 1 + Math.random() * 2, // Frequência de pulsação única para cada obstáculo
       pulseMagnitude: 0.1 + Math.random() * 0.1, // Magnitude da pulsação
       wobble: Math.random() * 0.5, // Quantidade de oscilação
       particleTimer: 0, // Timer para emissão de partículas
-      
-      // Cor com variação
       color: colorBase,
-      
-      // Trilha de movimento
       trail: {
         active: hasTrail,
-        length: type === "meteor" ? 8 + Math.floor(Math.random() * 5) : 5,
+        length: pattern.type === "meteor" ? 8 + Math.floor(Math.random() * 5) : 5,
         points: []
       }
-    })
+    });
+
+    this.obstacles.push(obstacle);
   }
+
   getObstacles(): Obstacle[] {
     return this.obstacles
   }

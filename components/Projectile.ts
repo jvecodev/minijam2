@@ -1,5 +1,6 @@
 import type p5Types from "p5"
 import { Ring } from "@/game/Ring"
+import { ObjectPool } from "@/game/entities/ObjectPool"
 
 export class Projectile {
   p5: p5Types
@@ -16,23 +17,22 @@ export class Projectile {
   distanceTraveled: number
   maxDistance: number
   color: { r: number; g: number; b: number; }
+  
   constructor(p5: p5Types, startX: number, startY: number, targetX: number, targetY: number) {
     this.p5 = p5
     this.x = startX
     this.y = startY
-    this.width = this.p5.random(8, 12) // Variação no tamanho dos projéteis
-    this.height = this.width
-    this.speed = this.p5.random(14, 18) // Variação na velocidade
-    this.active = true
+    this.width = 10 // Valor padrão, será alterado no init()
+    this.height = 10
+    this.speed = 15
+    this.active = false
     this.targetX = targetX
     this.targetY = targetY
-    
-    // Calcula a direção normalizada para o alvo com pequena variação de trajetória
-    const dx = targetX - startX + this.p5.random(-15, 15) // Pequeno desvio aleatório
-    const dy = targetY - startY + this.p5.random(-15, 15)
-    const distance = Math.sqrt(dx * dx + dy * dy)
-    this.directionX = dx / distance
-    this.directionY = dy / distance
+    this.directionX = 0
+    this.directionY = 0
+    this.distanceTraveled = 0
+    this.maxDistance = p5.width * 1.5
+    this.color = { r: 100, g: 100, b: 255 }
     
     this.distanceTraveled = 0
     this.maxDistance = this.p5.width * 1.5 // Para limitar a distância do tiro
@@ -46,6 +46,41 @@ export class Projectile {
       { r: this.p5.random(180, 255), g: this.p5.random(100, 180), b: this.p5.random(200, 255) }  // Roxo
     ]
     this.color = colorSchemes[Math.floor(this.p5.random(colorSchemes.length))]
+  }
+
+  reset(): void {
+    this.active = false;
+    this.distanceTraveled = 0;
+  }
+
+  init(startX: number, startY: number, targetX: number, targetY: number): void {
+    this.x = startX;
+    this.y = startY;
+    this.width = this.p5.random(8, 12); // Variação no tamanho dos projéteis
+    this.height = this.width;
+    this.speed = this.p5.random(14, 18); // Variação na velocidade
+    this.active = true;
+    this.targetX = targetX;
+    this.targetY = targetY;
+    
+    // Calcula a direção normalizada para o alvo com pequena variação de trajetória
+    const dx = targetX - startX + this.p5.random(-15, 15); // Pequeno desvio aleatório
+    const dy = targetY - startY + this.p5.random(-15, 15);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    this.directionX = dx / distance;
+    this.directionY = dy / distance;
+    
+    this.distanceTraveled = 0;
+    
+    // Paleta de cores variada para os projéteis
+    const colorSchemes = [
+      { r: this.p5.random(50, 100), g: this.p5.random(150, 255), b: this.p5.random(200, 255) }, // Azul
+      { r: this.p5.random(200, 255), g: this.p5.random(50, 150), b: this.p5.random(50, 100) }, // Vermelho
+      { r: this.p5.random(50, 100), g: this.p5.random(200, 255), b: this.p5.random(50, 150) }, // Verde
+      { r: this.p5.random(200, 255), g: this.p5.random(180, 255), b: this.p5.random(50, 100) }, // Amarelo
+      { r: this.p5.random(180, 255), g: this.p5.random(100, 180), b: this.p5.random(200, 255) }  // Roxo
+    ];
+    this.color = colorSchemes[Math.floor(this.p5.random(colorSchemes.length))];
   }
 
   update(deltaTime: number) {
@@ -137,12 +172,21 @@ export class ProjectileManager {
   projectiles: Projectile[]
   lastShotTime: number
   shotCooldown: number
+  projectilePool: ObjectPool<Projectile>
 
   constructor(p5: p5Types) {
     this.p5 = p5
     this.projectiles = []
     this.lastShotTime = 0
     this.shotCooldown = 0.5 // Tempo em segundos entre os tiros
+    
+    // Inicializa o pool de projéteis
+    this.projectilePool = new ObjectPool<Projectile>(
+      () => new Projectile(this.p5, 0, 0, 0, 0), // Factory - cria um projétil inativo
+      (proj) => proj.reset(),                  // Reset - reinicia um projétil
+      20,                                       // Tamanho inicial do pool
+      100                                       // Tamanho máximo do pool
+    )
   }
 
   canShoot(currentTime: number) {
@@ -151,22 +195,38 @@ export class ProjectileManager {
 
   shoot(startX: number, startY: number, targetX: number, targetY: number, currentTime: number) {
     if (this.canShoot(currentTime)) {
-      const projectile = new Projectile(this.p5, startX, startY, targetX, targetY)
-      this.projectiles.push(projectile)
-      this.lastShotTime = currentTime
-      return true
+      // Obtém um projétil do pool e inicializa
+      const projectile = this.projectilePool.get();
+      projectile.init(startX, startY, targetX, targetY);
+      
+      this.projectiles.push(projectile);
+      this.lastShotTime = currentTime;
+      return true;
     }
-    return false
+    return false;
   }
 
   update(deltaTime: number) {
+    // Array para armazenar projéteis inativos
+    const inactiveProjectiles: Projectile[] = [];
+    
     // Atualiza todos os projéteis
     for (const projectile of this.projectiles) {
-      projectile.update(deltaTime)
+      projectile.update(deltaTime);
+      
+      // Coleta projéteis inativos
+      if (!projectile.active) {
+        inactiveProjectiles.push(projectile);
+      }
     }
     
-    // Remove projéteis inativos
-    this.projectiles = this.projectiles.filter(p => p.active)
+    // Devolve os projéteis inativos ao pool
+    for (const inactiveProj of inactiveProjectiles) {
+      this.projectilePool.release(inactiveProj);
+    }
+    
+    // Mantém apenas os projéteis ativos na lista
+    this.projectiles = this.projectiles.filter(p => p.active);
   }
 
   draw() {
