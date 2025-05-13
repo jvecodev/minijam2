@@ -22,6 +22,7 @@ interface GameSketchProps {
   initialScore: number
   initialLevel: number
   onGameOver: () => void
+  onVictory: (score: number) => void 
 }
 
 export default function GameSketch({
@@ -33,6 +34,7 @@ export default function GameSketch({
   initialScore,
   initialLevel,
   onGameOver,
+  onVictory,
 }: GameSketchProps) {  // Referência para o estado do jogo
   const gameRef = useRef({
     player: null as Player | null,
@@ -45,22 +47,23 @@ export default function GameSketch({
     score: initialScore,
     lives: initialLives,
     level: initialLevel,
-    distance: 0, // Distância percorrida (para pontuação e dificuldade)
-    gameSpeed: 5, // Velocidade base do jogo
-    centerX: 0, // Centro X do anel
-    centerY: 0, // Centro Y do anel
-    lastObstacleTime: 0, // Tempo desde o último obstáculo
-    lastPowerUpTime: 0, // Tempo desde o último power-up
-    gameTime: 0, // Tempo total de jogo
+    distance: 0, 
+    gameSpeed: 5,
+    centerX: 0, 
+    centerY: 0, 
+    lastObstacleTime: 0,
+    lastPowerUpTime: 0, 
+    gameTime: 0, 
     isGameOver: false,
-    coresDestroyed: 0, // Contagem de núcleos destruídos
+    coresDestroyed: 0, 
+    coresNeededForVictory: 3, // Número de núcleos que precisam ser destruídos para vencer
+    hasWon: false, // Novo estado para controlar se o jogador venceu
     controls: { left: false, right: false, jump: false, shoot: false },
   })
 
-  // Carregar o volume das opções
+ 
   const volume = useRef(0.5)
   useEffect(() => {
-    // Verificar se estamos no navegador antes de acessar localStorage
     if (typeof window !== "undefined") {
       const savedVolume = localStorage.getItem("saturnRunnerVolume")
       if (savedVolume) {
@@ -69,134 +72,114 @@ export default function GameSketch({
     }
   }, [])
 
-  // Hook de som
   const { playSound } = useSound(volume.current)
-  // Setup do P5.js
   const setup = (p5: p5Types, canvasParentRef: Element): void => {
-    // Cria o canvas em tela cheia
     p5.createCanvas(p5.windowWidth, p5.windowHeight).parent(canvasParentRef)
 
     const game = gameRef.current
     
-    // Define o centro da tela
+   
     game.centerX = p5.width / 2
     game.centerY = p5.height / 2
     
-    // Inicializa o anel de Saturno
     game.ring = new Ring(p5, game.centerX, game.centerY)
-      // Inicializa os componentes do jogo
     game.background = new Background(p5)
     
-    // Cria o jogador e configura para usar o anel
     game.player = new Player(p5, p5.width * 0.5, p5.height * 0.5)
     if (game.player && game.ring) {
       game.player.setRing(game.ring)
     }
     
-    // Inicializa gerenciadores de obstáculos e power-ups
     const ringWidth = game.ring.getRingWidth()
+
     game.obstacleManager = new ObstacleManager(p5, game.centerX, ringWidth)
     game.powerUpManager = new PowerUpManager(p5, game.centerX, ringWidth)
     
-    // Inicializa o gerenciador de projéteis
     game.projectileManager = new ProjectileManager(p5)
     
-    // Inicializa o gerenciador de projéteis do núcleo
     game.coreProjectileManager = new CoreProjectileManager(p5)
 
-    // Configura a velocidade inicial do jogo
     game.gameSpeed = 5 + (game.level - 1) * 0.5
   }
-  // Função de desenho principal (loop do jogo)
   const draw = (p5: p5Types): void => {
     if (isPaused) return
 
     const game = gameRef.current
     if (!game.player || !game.obstacleManager || !game.powerUpManager || !game.background || !game.ring) return
 
-    // Atualiza o tempo do jogo
-    const deltaTime = p5.deltaTime / 1000 // Converte para segundos
-    game.gameTime += deltaTime    // Atualiza os controles do jogador
+    const deltaTime = p5.deltaTime / 1000 
+    game.gameTime += deltaTime    
     game.controls = {
-      left: p5.keyIsDown(37) || p5.keyIsDown(65), // Seta esquerda ou A
-      right: p5.keyIsDown(39) || p5.keyIsDown(68), // Seta direita ou D
-      jump: p5.keyIsDown(32), // Barra de espaço
-      shoot: p5.keyIsDown(70) || p5.mouseIsPressed // Tecla F ou clique do mouse
+      left: p5.keyIsDown(37) || p5.keyIsDown(65), 
+      right: p5.keyIsDown(39) || p5.keyIsDown(68), 
+      jump: p5.keyIsDown(32), 
+      shoot: p5.keyIsDown(70) || p5.mouseIsPressed 
     }
 
-    // Limpa o canvas
     p5.background(0)
 
-    // Desenha o fundo com paralaxe
     game.background.update(game.gameSpeed)
     game.background.draw()
     
-    // Atualiza e desenha o anel de Saturno
     game.ring.update(deltaTime)
-    game.ring.draw()    // Atualiza e desenha o jogador
+    game.ring.draw()    
     game.player.update(game.controls, deltaTime, game.gameTime)
     game.player.draw()
 
-    // Atualiza a distância percorrida
+   
     game.distance += game.gameSpeed * deltaTime
 
-    // Atualiza a pontuação com base na distância
     const newScore = Math.floor(game.distance * 10)
     if (newScore !== game.score) {
       game.score = newScore
       updateScore(game.score)
     }
 
-    // Aumenta o nível a cada 1000 pontos
+   
     const newLevel = Math.floor(game.score / 1000) + 1
     if (newLevel !== game.level) {
       game.level = newLevel
       updateLevel(game.level)
-      game.gameSpeed = 5 + (game.level - 1) * 0.5 // Aumenta a velocidade com o nível
+      game.gameSpeed = 5 + (game.level - 1) * 0.5 
       playSound("levelUp")
     }
 
-    // Gera novos obstáculos com base no tempo
     if (game.gameTime - game.lastObstacleTime > 2 / game.level) {
-      // Gera um obstáculo em uma posição aleatória do anel
+     
       const obstacleAngle = game.ring.getRandomAngle()
       game.obstacleManager.spawnObstacle(game.level, obstacleAngle)
       game.lastObstacleTime = game.gameTime
     }
 
-    // Gera novos power-ups com base no tempo (menos frequentes que obstáculos)
     if (game.gameTime - game.lastPowerUpTime > 5 / game.level) {
       const powerUpAngle = game.ring.getRandomAngle()
       game.powerUpManager.spawnPowerUp(powerUpAngle)
       game.lastPowerUpTime = game.gameTime
     }
 
-    // Atualiza e desenha obstáculos
     game.obstacleManager.update(game.gameSpeed, deltaTime)
-    game.obstacleManager.draw()    // Atualiza e desenha power-ups
+    game.obstacleManager.draw()   
     game.powerUpManager.update(game.gameSpeed, deltaTime)
     game.powerUpManager.draw()
     
-    // Verifica se o jogador está atirando
+
     if (game.player.isShooting && game.projectileManager) {
       const shootDir = game.player.getShootDirection()
       const targetX = game.centerX
       const targetY = game.centerY
       
       if (game.player.shoot(game.gameTime)) {
-        // Cria um novo projétil na posição do jogador direcionado ao centro do planeta
         game.projectileManager.shoot(game.player.x, game.player.y, targetX, targetY, game.gameTime)
-        playSound("shoot") // Som de tiro
+        playSound("shoot") 
       }
     }
     
-    // Atualiza e desenha projéteis
     if (game.projectileManager) {
       game.projectileManager.update(deltaTime)
       game.projectileManager.draw()
     }
     
-    // Verifica se algum projétil atingiu o núcleo do planeta
+   
     if (game.ring && game.projectileManager) {
       const corePos = game.ring.getCorePosition()
       if (corePos && corePos.active) {
@@ -205,54 +188,53 @@ export default function GameSketch({
         for (const projectile of projectiles) {
           if (!projectile.active) continue
           
-          // Verifica distância entre projétil e núcleo
+         
           const dx = projectile.x - corePos.x
           const dy = projectile.y - corePos.y
           const distance = Math.sqrt(dx * dx + dy * dy)
           
           if (distance < corePos.radius + projectile.width/2) {
-            // Projétil atingiu o núcleo!
             projectile.active = false
             
-            // Registra o acerto no núcleo
             const coreDestroyed = game.ring.hitCore()
             
             if (coreDestroyed) {
-              // Núcleo foi destruído!
               game.coresDestroyed++
               
-              // Adiciona pontos extras
               const bonusPoints = 500 * game.level
               game.score += bonusPoints
               updateScore(game.score)
               
-              // Efeito sonoro
+              
               playSound("explosion")
               
-              // Depois de alguns segundos, cria um novo núcleo
-              setTimeout(() => {
-                if (game.ring) game.ring.resetCore()
-              }, 3000)
+              if (game.coresDestroyed >= game.coresNeededForVictory && !game.hasWon) {
+                game.hasWon = true;
+                setTimeout(() => {
+                  onVictory(game.score);
+                }, 2000);
+              } else {
+                setTimeout(() => {
+                  if (game.ring) game.ring.resetCore()
+                }, 3000)
+              }
             } else {
-              // Efeito sonoro de acerto
               playSound("hit")
             }
           }
         }
       }
     }
-    
-    // Atualiza e desenha os projéteis do núcleo
+
     if (game.coreProjectileManager && game.ring) {
       const corePos = game.ring.getCorePosition()
       if (game.player) {
         game.coreProjectileManager.update(deltaTime, corePos, game.player.x, game.player.y)
         game.coreProjectileManager.draw()
         
-        // Ajusta a dificuldade com base no nível
+ 
         game.coreProjectileManager.adjustDifficulty(game.level)
-        
-        // Verifica colisões entre projéteis do núcleo e o jogador
+  
         const playerHitbox = game.player.getHitbox()
         const coreProjectiles = game.coreProjectileManager.getProjectiles()
         
@@ -269,18 +251,14 @@ export default function GameSketch({
             projectile.width,
             projectile.height
           )) {
-            // Projétil atingiu o jogador!
             projectile.active = false
             
-        // Se o jogador tem escudo, apenas destroi o escudo
             if (game.player.hasShield) {
               game.player.hasShield = false
               game.player.showDamageEffect()
               playSound("shieldBreak")
             } else {
-              // Caso contrário causa dano ao jogador
               handleDamage()
-              // Efeito sonoro especial para projéteis do núcleo
               playSound("damage")
             }
           }
@@ -288,7 +266,7 @@ export default function GameSketch({
       }
     }
 
-    // Verifica colisões com obstáculos
+  
     const playerHitbox = game.player.getHitbox()
     const obstacles = game.obstacleManager.getObstacles()
 
@@ -423,7 +401,7 @@ export default function GameSketch({
     
     // Exibe número de núcleos destruídos
     p5.fill(255, 150, 0)
-    p5.text(`Núcleos Destruídos: ${game.coresDestroyed}`, 20, 110)
+    p5.text(`Núcleos Destruídos: ${game.coresDestroyed}/${game.coresNeededForVictory}`, 20, 110)
 
     // Exibe estado dos power-ups
     if (game.player) {

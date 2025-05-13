@@ -3,13 +3,11 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
-// Não importamos o GameSketch diretamente, apenas de forma dinâmica
 
-// Importação dinâmica do componente P5 para evitar problemas de SSR
 const DynamicGameSketch = dynamic(
   () => import("@/components/GameSketch"),
   {
-    ssr: false, // Garantir que não seja renderizado no servidor
+    ssr: false, 
     loading: () => <div className="loading">Carregando jogo...</div>
   }
 )
@@ -23,12 +21,10 @@ export default function GamePage() {
   const [isGameOver, setIsGameOver] = useState(false)
   const [isBrowser, setIsBrowser] = useState(false)
 
-  // Detectar se estamos no navegador
   useEffect(() => {
     setIsBrowser(true)
   }, [])
 
-  // Referência para o estado do jogo que pode ser acessado em event handlers
   const gameStateRef = useRef({
     score,
     lives,
@@ -36,7 +32,7 @@ export default function GamePage() {
     isPaused,
   })
 
-  // Atualiza a referência quando o estado muda
+
   useEffect(() => {
     gameStateRef.current = {
       score,
@@ -46,9 +42,8 @@ export default function GamePage() {
     }
   }, [score, lives, level, isPaused])
 
-  // Manipulador de teclas para pausar o jogo
   useEffect(() => {
-    // Verificar se estamos no navegador antes de acessar window
+
     if (typeof window !== "undefined") {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Escape") {
@@ -59,14 +54,17 @@ export default function GamePage() {
       window.addEventListener("keydown", handleKeyDown)
       return () => window.removeEventListener("keydown", handleKeyDown)
     }
-    return undefined; // Retorno para ambiente de servidor
+    return undefined; 
   }, [])
 
-  // Função chamada quando o jogo termina
   const handleGameOver = () => {
     setIsGameOver(true)
-    // Navega para a tela de game over com a pontuação
     router.push(`/game-over?score=${score}`)
+  }
+
+  const handleVictory = (finalScore: number) => {
+    setIsGameOver(true)
+    router.push(`/victory?score=${finalScore}`)
   }
 
   // Função para atualizar a pontuação
@@ -99,6 +97,7 @@ export default function GamePage() {
           initialScore={score}
           initialLevel={level}
           onGameOver={handleGameOver}
+          onVictory={handleVictory}
         />
       )}
 
